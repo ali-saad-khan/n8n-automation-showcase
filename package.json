@@ -1,0 +1,17 @@
+{
+  "name": "n8n-automation-showcase",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Importable n8n workflows (core nodes only) plus a static, dependency-free workflow viewer.",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "validate": "node scripts/validate.mjs",
+    "build:data": "node scripts/build-data.mjs",
+    "build:demo": "node scripts/build-demo.mjs",
+    "check:import": "bash scripts/docker-import-check.sh",
+    "check:versions": "bash scripts/check-node-versions.sh",
+    "serve": "node scripts/serve.mjs"
+  }
+}

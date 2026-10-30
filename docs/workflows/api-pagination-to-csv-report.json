@@ -1,0 +1,396 @@
+{
+  "name": "API Pagination to CSV Report",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Daily orders report\nSchedule -> config -> paginated GET -> flatten pages -> normalise rows -> (CSV file | totals) -> merge -> deliver with bearer header.\n\nEnv: REPORT_API_BASE_URL, REPORT_API_TOKEN, REPORT_DELIVERY_URL. Needs N8N_BLOCK_ENV_ACCESS_IN_NODE=false.",
+        "width": 1500,
+        "height": 120,
+        "color": 4
+      },
+      "id": "5afc245a-8fc0-4f6e-ab5a-71501ac54d28",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "id": "a71ed6e8-a4f9-459d-a9e9-8b88d89f0224",
+      "name": "Daily 07:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f7e7ecf4-d3c8-427d-ab49-1bb74a510ec4",
+              "name": "apiBaseUrl",
+              "value": "={{ $env.REPORT_API_BASE_URL || 'https://api.example.com/v1' }}",
+              "type": "string"
+            },
+            {
+              "id": "ee46332e-629f-4b3e-a7a8-0cb0e20b2c38",
+              "name": "pageSize",
+              "value": "100",
+              "type": "number"
+            },
+            {
+              "id": "8933309a-8f7b-491a-a501-579af930e133",
+              "name": "reportDate",
+              "value": "={{ $now.minus({ days: 1 }).toFormat('yyyy-MM-dd') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "5f4d0ba5-8192-4c9c-a14c-67e71eb6760b",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.apiBaseUrl }}/orders",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "={{ $json.pageSize }}"
+            },
+            {
+              "name": "created_date",
+              "value": "={{ $json.reportDate }}"
+            }
+          ]
+        },
+        "options": {
+          "pagination": {
+            "pagination": {
+              "paginationMode": "updateAParameterInEachRequest",
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "qs",
+                    "name": "page",
+                    "value": "={{ $pageCount + 1 }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ $response.body.data.length < 100 }}",
+              "limitPagesFetched": true,
+              "maxRequests": 50
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "92350291-cffb-4000-ac02-fbf904ca1cd1",
+      "name": "Fetch Orders (paginated)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        180
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "d0949075-d70b-40b7-aa27-f8929f8de390",
+      "name": "Split Pages into Orders",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        660,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5befaafa-3775-46a3-aea8-1d909b541397",
+              "name": "order_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "ae36de9f-7ec0-4190-a21c-48361bdc0e79",
+              "name": "customer",
+              "value": "={{ $json.customer?.name ?? \"unknown\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a131d6c5-9f9d-4b88-a228-2c514bc844df",
+              "name": "status",
+              "value": "={{ $json.status }}",
+              "type": "string"
+            },
+            {
+              "id": "19bae621-afa5-4020-ac7d-f4b357880de8",
+              "name": "total",
+              "value": "={{ Number($json.total_cents) / 100 }}",
+              "type": "number"
+            },
+            {
+              "id": "05705282-0637-4f6e-ab28-ebb795d63f6a",
+              "name": "created_at",
+              "value": "={{ $json.created_at }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "78bb7747-2013-4348-a28f-81c0dea6de10",
+      "name": "Normalise Rows",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        880,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "csv",
+        "options": {
+          "fileName": "={{ \"orders-\" + $(\"Config\").first().json.reportDate + \".csv\" }}"
+        }
+      },
+      "id": "f6f3df21-bffc-4e0c-a178-c00be93bd7d5",
+      "name": "Build CSV File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "fieldsToSummarize": {
+          "values": [
+            {
+              "aggregation": "count",
+              "field": "order_id"
+            },
+            {
+              "aggregation": "sum",
+              "field": "total"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1430474c-545f-48a9-a1f7-7ca587f49d8f",
+      "name": "Totals",
+      "type": "n8n-nodes-base.summarize",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "c33f2c51-ee23-46ad-acc9-50869dcca521",
+      "name": "Combine File + Totals",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1340,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.REPORT_DELIVERY_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.REPORT_API_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "order_count",
+              "value": "={{ $json.count_order_id }}"
+            },
+            {
+              "name": "revenue_total",
+              "value": "={{ $json.sum_total }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "28fc805e-ba54-40f9-a3d8-50a1fd3f69f2",
+      "name": "Send Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        180
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Daily 07:00": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Fetch Orders (paginated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Orders (paginated)": {
+      "main": [
+        [
+          {
+            "node": "Split Pages into Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Pages into Orders": {
+      "main": [
+        [
+          {
+            "node": "Normalise Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalise Rows": {
+      "main": [
+        [
+          {
+            "node": "Build CSV File",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Totals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build CSV File": {
+      "main": [
+        [
+          {
+            "node": "Combine File + Totals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Totals": {
+      "main": [
+        [
+          {
+            "node": "Combine File + Totals",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Combine File + Totals": {
+      "main": [
+        [
+          {
+            "node": "Send Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

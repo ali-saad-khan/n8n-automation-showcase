@@ -1,0 +1,190 @@
+{
+  "name": "AI Agent with Tools and Memory",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Chat agent on local Ollama\nMemory: window buffer (last 8 turns, keyed by chat session). Tools: HTTP Request (exchange rates, placeholder API) + Calculator. Use a tool-calling model, e.g. qwen2.5:7b or llama3.1:8b.",
+        "width": 900,
+        "height": 100,
+        "color": 4
+      },
+      "id": "91864286-7bfa-4e1b-a11c-e10cc2b9a3fd",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "public": false,
+        "options": {}
+      },
+      "id": "d2e7aa99-ea6b-4e05-a1da-00ce50664344",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        160
+      ],
+      "webhookId": "e8d52dc4-e899-42f1-a8d5-8a661c8108a4"
+    },
+    {
+      "parameters": {
+        "promptType": "auto",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "You are a finance helper. Use the exchange rate tool for live currency rates and the calculator for any arithmetic - never do maths in your head. Keep answers short and state which rate you used.",
+          "maxIterations": 6
+        }
+      },
+      "id": "b5325c81-1e47-4aac-a772-b2e9fb7ca5b3",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        260,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "model": "qwen2.5:7b",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "b3d73353-dcc4-4807-a1bd-5df30dde3c69",
+      "name": "Ollama Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        60,
+        400
+      ],
+      "credentials": {
+        "ollamaApi": {
+          "id": "REPLACE_ME",
+          "name": "Ollama (local)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 8
+      },
+      "id": "c016e160-1c99-4b83-a413-cf84f0591f2c",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        260,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get the latest exchange rate for a base currency. Input: ISO 4217 code such as USD or EUR.",
+        "method": "GET",
+        "url": "https://api.example.com/v1/rates/{base}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "base",
+              "description": "ISO 4217 base currency code, e.g. USD",
+              "type": "string"
+            }
+          ]
+        },
+        "optimizeResponse": false
+      },
+      "id": "02f356f0-c758-490c-ae9d-6b0229f16ae5",
+      "name": "Exchange Rate Tool (HTTP)",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "5cb171f8-f29f-4514-a771-269d65f92183",
+      "name": "Calculator",
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [
+        660,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exchange Rate Tool (HTTP)": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculator": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

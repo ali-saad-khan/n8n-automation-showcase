@@ -1,0 +1,357 @@
+{
+  "name": "Error Alert and Retry with Backoff",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## A. Global error workflow\nSet this workflow as \"Error Workflow\" in other workflows' settings. Posts a Slack-shaped message to $env.ALERT_WEBHOOK_URL.",
+        "width": 800,
+        "height": 90,
+        "color": 4
+      },
+      "id": "b4cbdd9b-d5db-4cee-a8f7-cee83fb8e66b",
+      "name": "Note: Error alert",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## B. Retry with exponential backoff + jitter (explicit loop)\nCall API -> on error: attempts left? -> compute delay -> Wait -> try again. Out of attempts -> Stop and Error (fires workflow A). Node-level \"Retry On Fail\" is also used on the notify call.",
+        "width": 1700,
+        "height": 90,
+        "color": 5
+      },
+      "id": "12af7e69-5cb3-41c3-ab1d-724edd26de7a",
+      "name": "Note: Retry",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "3db79977-b9e5-49f9-acce-3b2a48092fda",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6c2fe9b5-fc81-43a6-a671-7d2f7889b301",
+              "name": "text",
+              "value": "={{ ':rotating_light: Workflow *' + $json.workflow.name + '* failed\\nExecution: ' + $json.execution.id + '\\nNode: ' + ($json.execution.lastNodeExecuted ?? 'n/a') + '\\nError: ' + ($json.execution.error?.message ?? 'unknown') + '\\nURL: ' + ($json.execution.url ?? 'n/a') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "e462b87a-3a04-4e1f-a6e3-33b228660aba",
+      "name": "Format Alert",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ALERT_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { text: $json.text } }}",
+        "options": {}
+      },
+      "id": "b357766a-3462-4c21-a390-888038d48e66",
+      "name": "Notify Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        60
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500
+    },
+    {
+      "parameters": {},
+      "id": "8de5526b-eebe-4c8a-a9a3-9b910e6aa1b6",
+      "name": "Run Retry Demo",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "651a1095-03d2-4eb5-a90e-c12545938c5c",
+              "name": "attempt",
+              "value": "={{ $json.attempt ?? 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "adf147d2-6fb4-4961-a786-500bea71a152",
+              "name": "maxAttempts",
+              "value": "4",
+              "type": "number"
+            },
+            {
+              "id": "8a2fb2f7-2d6a-4d06-ae47-6bb405753ad6",
+              "name": "baseDelaySeconds",
+              "value": "2",
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "f4d24965-7b87-435c-a4e2-0bec0629fdf5",
+      "name": "Retry State",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.FLAKY_API_URL }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "4b877602-90b0-42ac-ac32-6258181029ac",
+      "name": "Call Flaky API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        360
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "1131359a-86b4-47e1-ab79-2a0d5ec209b1",
+      "name": "Success",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        680,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d61bf822-3446-4d98-af99-533e37d332eb",
+              "leftValue": "={{ $('Retry State').item.json.attempt + 1 }}",
+              "rightValue": "={{ $('Retry State').item.json.maxAttempts }}",
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3f99e88e-272d-43e8-a840-d336e0aa846f",
+      "name": "Attempts Left?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        680,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Exponential backoff with jitter: base * 2^attempt + random 0-1s\nconst s = $('Retry State').first().json;\nconst delay = s.baseDelaySeconds * 2 ** s.attempt + Math.random();\nreturn [{ json: { attempt: s.attempt + 1, waitSeconds: Math.round(delay * 10) / 10 } }];"
+      },
+      "id": "1a1ec477-56db-485b-a21e-f50af6af3f4f",
+      "name": "Compute Backoff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": "={{ $json.waitSeconds }}",
+        "unit": "seconds"
+      },
+      "id": "09574421-1ecb-4cc0-a376-823147384fc0",
+      "name": "Wait Before Retry",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        440
+      ],
+      "webhookId": "03e33ea0-5a64-4c00-a2aa-da39fd0a10aa"
+    },
+    {
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "={{ \"Flaky API still failing after \" + $(\"Retry State\").item.json.maxAttempts + \" attempts\" }}"
+      },
+      "id": "913d9b67-86da-4be7-a27a-21ac1d0c1bf1",
+      "name": "Give Up (Stop and Error)",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        900,
+        610
+      ]
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Alert": {
+      "main": [
+        [
+          {
+            "node": "Notify Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Retry Demo": {
+      "main": [
+        [
+          {
+            "node": "Retry State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry State": {
+      "main": [
+        [
+          {
+            "node": "Call Flaky API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Flaky API": {
+      "main": [
+        [
+          {
+            "node": "Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Attempts Left?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attempts Left?": {
+      "main": [
+        [
+          {
+            "node": "Compute Backoff",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Give Up (Stop and Error)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Backoff": {
+      "main": [
+        [
+          {
+            "node": "Wait Before Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Before Retry": {
+      "main": [
+        [
+          {
+            "node": "Retry State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

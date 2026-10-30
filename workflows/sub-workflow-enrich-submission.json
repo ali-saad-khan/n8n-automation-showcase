@@ -1,0 +1,68 @@
+{
+  "name": "Sub-workflow: Enrich Submission",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "Called by \"Authenticated Webhook Intake\". Adds priority + ticket reference. Replace the Execute Workflow ID in the parent after importing this.",
+        "width": 560,
+        "height": 90,
+        "color": 4
+      },
+      "id": "dedeab4d-7dae-4e05-a0f8-0304964ea3dd",
+      "name": "Note: Purpose",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -20
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "a74f5fc2-a0d6-4e04-a4ad-6706de1e3780",
+      "name": "When Called by Parent",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keyword-based priority + ticket reference. Pure JS, no external calls.\nconst URGENT = ['outage', 'down', 'urgent', 'refund', 'breach', 'asap'];\nreturn $input.all().map(({ json }) => {\n  const text = (json.subject + ' ' + json.message).toLowerCase();\n  const priority = URGENT.some((k) => text.includes(k)) ? 'high' : 'normal';\n  const ticketRef = 'TKT-' + Date.now().toString(36).toUpperCase();\n  return { json: { ...json, priority, ticketRef } };\n});"
+      },
+      "id": "e1edc081-a978-4999-a97d-3f359b3a1483",
+      "name": "Score Priority",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "When Called by Parent": {
+      "main": [
+        [
+          {
+            "node": "Score Priority",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
